@@ -18,6 +18,7 @@ import fitz  # PyMuPDF for PDF image extraction
 from docx import Document
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+import tempfile
 
 print("Starting the application...")
 
@@ -94,10 +95,9 @@ def chunk_text(text, chunk_size=500, overlap=50):
 
 def process_image(image):
     print(f"Processing image")
-    img_byte_arr = io.BytesIO()
-    image.save(img_byte_arr, format='PNG')
-    img_byte_arr = img_byte_arr.getvalue()
-    return img_byte_arr
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+        image.save(temp_file, format='PNG')
+        return temp_file.name
 
 # Indexing function
 def index_documents(directory):
@@ -154,6 +154,8 @@ def index_documents(directory):
             # For images, use LLaVA to generate a description and then encode it
             image_description = llava_generate("Describe this image in detail.", doc)
             embeddings.append(model.encode([image_description])[0])
+            # Delete the temporary file after processing
+            os.unlink(doc)
     
     print(f"Adding embeddings to FAISS index")
     index.add(np.array(embeddings))
@@ -280,7 +282,7 @@ def encode_image_to_base64(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
-def llava_generate(prompt, image_path=None):
+def llava_generate(prompt, image_path):
     if image_path:
         base64_image = encode_image_to_base64(image_path)
         response = ollama.generate(model='llava', prompt=prompt, images=[base64_image])
@@ -467,3 +469,4 @@ def main():
 if __name__ == "__main__":
     main()
     print("Application finished")
+
